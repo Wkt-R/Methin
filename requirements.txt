@@ -1,0 +1,6 @@
+discord.py>=2.4,<3
+SQLAlchemy[asyncio]>=2.0,<2.1
+asyncpg>=0.29
+alembic>=1.13
+pydantic>=2.7
+pydantic-settings>=2.3

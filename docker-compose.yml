@@ -1,0 +1,53 @@
+name: methin
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-methin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-methin}
+      POSTGRES_DB: ${POSTGRES_DB:-methin}
+    ports:
+      # Wystawione na hosta, żeby dało się odpalić bota/testy z lokalnego venv
+      # i podłączyć DBeaver/psql. Zmień port w .env, jeśli 5432 jest zajęty.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Skrypty z tego katalogu wykonują się TYLKO przy pierwszym starcie na pustym wolumenie
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-methin} -d ${POSTGRES_DB:-methin}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  bot:
+    build:
+      context: .
+      target: dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # W kontenerze host bazy to nazwa usługi "db", nie localhost
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-methin}:${POSTGRES_PASSWORD:-methin}@db:5432/${POSTGRES_DB:-methin}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Kod montowany z hosta: edycja w IDE od razu widoczna w kontenerze
+      - ./src:/app/src
+      - ./tests:/app/tests
+    command: python -m methin
+
+  # Opcjonalny podgląd bazy w przeglądarce: docker compose --profile tools up -d
+  adminer:
+    image: adminer:4
+    profiles: ["tools"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
